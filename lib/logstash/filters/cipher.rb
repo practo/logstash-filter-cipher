@@ -130,6 +130,8 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
   # instance and max_cipher_reuse = 1 by default
   # [source,ruby]
   #     filter { cipher { max_cipher_reuse => 1000 }}
+  config :max_cipher_reuse, :validate => :number, :default => 1
+
 
   config :whitelist_fields, :validate => :array, :required => true
 
@@ -144,10 +146,11 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
 
     #If decrypt or encrypt fails, we keep it it intact.
-    begin
-      hash = event.to_hash
-      hash.each_key do |field|
+    hash = event.to_hash
+    hash.each_key do |field|
+      begin
         next unless !@whitelist_fields.include?(field)
+        next if (event[field].to_s.empty?)
 
         # @logger.debug("Encrypting field", :field => field)
         data = event[field]
@@ -192,14 +195,21 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
         #In doubt, I keep it.
         filter_matched(event) if !result.nil?
 
+        @total_cipher_uses += 1
 
+        if !@max_cipher_reuse.nil? and @total_cipher_uses >= @max_cipher_reuse
+          @logger.debug("max_cipher_reuse["+@max_cipher_reuse.to_s+"] reached, total_cipher_uses = "+@total_cipher_uses.to_s)
+          init_cipher
+        end
+
+
+      rescue => e
+        @logger.warn("Exception catch on cipher filter", :event => event, :error => e)
+
+        # force a re-initialize on error to be safe
+        init_cipher
       end
 
-    rescue => e
-      @logger.warn("Exception catch on cipher filter", :event => event, :error => e)
-
-      # force a re-initialize on error to be safe
-      init_cipher
     end
   end # def filter
 
@@ -212,6 +222,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
     @cipher = OpenSSL::Cipher.new(@algorithm)
 
+    @total_cipher_uses = 0
 
     if @mode == "encrypt"
       @cipher.encrypt
