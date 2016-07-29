@@ -146,9 +146,9 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
 
     #If decrypt or encrypt fails, we keep it it intact.
-    hash = event.to_hash
-    hash.each_key do |field|
-      begin
+    begin
+      hash = event.to_hash
+      hash.each_key do |field|
         next unless !@whitelist_fields.include?(field)
         next if (event[field].to_s.empty?)
 
@@ -193,7 +193,6 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
         #Is it necessary to add 'if !result.nil?' ? exception have been already catched.
         #In doubt, I keep it.
-        filter_matched(event) if !result.nil?
 
         @total_cipher_uses += 1
 
@@ -202,13 +201,16 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
           init_cipher
         end
 
-
-      rescue => e
-        @logger.warn("Exception catch on cipher filter", :event => event, :error => e)
-
-        # force a re-initialize on error to be safe
-        init_cipher
       end
+
+      # force a re-initialize on error to be safe
+    rescue => e
+      @logger.warn("Exception catch on cipher filter", :event => event, :error => e)
+
+      # force a re-initialize on error to be safe
+      init_cipher
+    else
+      filter_matched(event)
 
     end
   end # def filter
@@ -251,7 +253,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
     @cipher.padding = @cipher_padding if @cipher_padding
 
-    @logger.debug("Cipher initialisation done", :mode => @mode, :key => @key, :iv => @iv, :iv_random => @iv_random, :cipher_padding => @cipher_padding)
+    @logger.debug("Cipher initialisation done", :mode => @mode, :key => @key, :iv => @iv, :iv_random_length => @iv_random_length, :cipher_padding => @cipher_padding)
   end # def init_cipher
 
 
