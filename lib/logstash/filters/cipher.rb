@@ -131,7 +131,6 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
   # instance and max_cipher_reuse = 1 by default
   # [source,ruby]
   #     filter { cipher { max_cipher_reuse => 1000 }}
-  config :max_cipher_reuse, :validate => :number, :default => 1
 
 
   config :whitelist_fields, :validate => :array, :required => true
@@ -169,7 +168,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
         if !@iv_random_length.nil? and @mode == "encrypt"
           @random_iv = OpenSSL::Random.random_bytes(@iv_random_length)
-          data =  Zlib::Deflate.deflate(data)
+          data =  Zlib::Deflate.deflate(data.to_s)
         end
 
         # if iv_random_length is specified, generate a new one
@@ -200,12 +199,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
         #Is it necessary to add 'if !result.nil?' ? exception have been already catched.
         #In doubt, I keep it.
 
-        @total_cipher_uses += 1
 
-        if !@max_cipher_reuse.nil? and @total_cipher_uses >= @max_cipher_reuse
-          @logger.debug("max_cipher_reuse["+@max_cipher_reuse.to_s+"] reached, total_cipher_uses = "+@total_cipher_uses.to_s)
-          init_cipher
-        end
 
       end
 
@@ -230,7 +224,6 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
     @cipher = OpenSSL::Cipher.new(@algorithm)
 
-    @total_cipher_uses = 0
 
     if @mode == "encrypt"
       @cipher.encrypt
