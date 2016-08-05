@@ -168,7 +168,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
         if !@iv_random_length.nil? and @mode == "encrypt"
           @random_iv = OpenSSL::Random.random_bytes(@iv_random_length)
-          data =  Zlib::Deflate.deflate(':$;'+data.to_s)
+          data =  ':$;' + Zlib::Deflate.deflate(data.to_s)
         end
 
         # if iv_random_length is specified, generate a new one
@@ -191,11 +191,11 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
         end
 
         if @mode == "decrypt"
-          result = result.force_encoding("utf-8")
           if result.include? ":$;"
             result = result.byteslice(3..result.length)
             result =  Zlib::Inflate.inflate(result)
           end
+          result = result.force_encoding("utf-8")
         end
 
         event[field]= result
