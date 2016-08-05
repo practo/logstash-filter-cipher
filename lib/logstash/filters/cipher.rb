@@ -2,6 +2,7 @@
 require "logstash/filters/base"
 require "logstash/namespace"
 require "openssl"
+require "zlib"
 
 
 # This filter parses a source and apply a cipher or decipher before
@@ -155,7 +156,9 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
         # @logger.debug("Encrypting field", :field => field)
         data = event[field]
         if @mode == "decrypt"
-          data =  Base64.strict_decode64(data) if @base64 == true
+          if @base64 == true
+            data =  Base64.strict_decode64(data)
+          end
 
           if !@iv_random_length.nil?
             @random_iv = data.byteslice(0,@iv_random_length)
@@ -166,6 +169,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
         if !@iv_random_length.nil? and @mode == "encrypt"
           @random_iv = OpenSSL::Random.random_bytes(@iv_random_length)
+          data =  Zlib::Deflate.deflate(data)
         end
 
         # if iv_random_length is specified, generate a new one
@@ -182,12 +186,14 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
           if !@random_iv.nil?
             result = @random_iv + result
           end
-
-          result =  Base64.strict_encode64(result).encode("utf-8") if @base64 == true
+          if @base64 == true
+            result =  Base64.strict_encode64(result).encode("utf-8")
+          end
         end
 
 
         result = result.force_encoding("utf-8") if @mode == "decrypt"
+        result =  Zlib::Inflate.inflate(result) if @mode == "decrypt"
 
         event[field]= result
 
