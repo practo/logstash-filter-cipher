@@ -5,7 +5,6 @@ require "openssl"
 require "zlib"
 
 
-
 # This filter parses a source and apply a cipher or decipher before
 # storing it in the target.
 #
@@ -133,6 +132,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
   # [source,ruby]
   #     filter { cipher { max_cipher_reuse => 1000 }}
 
+
   config :whitelist_fields, :validate => :array, :required => true
 
   def register
@@ -152,11 +152,12 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
         next unless !@whitelist_fields.include?(field)
         next if (event[field].to_s.empty?)
 
-
         # @logger.debug("Encrypting field", :field => field)
         data = event[field]
         if @mode == "decrypt"
-          data =  Base64.strict_decode64(data) if @base64 == true
+          if @base64 == true
+            data =  Base64.strict_decode64(data)
+          end
 
           if !@iv_random_length.nil?
             @random_iv = data.byteslice(0,@iv_random_length)
@@ -167,7 +168,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
 
         if !@iv_random_length.nil? and @mode == "encrypt"
           @random_iv = OpenSSL::Random.random_bytes(@iv_random_length)
-          data =  Zlib::Deflate.deflate(data)
+          data =  Zlib::Deflate.deflate(':$;'+data.to_s)
         end
 
         # if iv_random_length is specified, generate a new one
@@ -184,13 +185,18 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
           if !@random_iv.nil?
             result = @random_iv + result
           end
-
-          result =  Base64.strict_encode64(result).encode("utf-8") if @base64 == true
+          if @base64 == true
+            result =  Base64.strict_encode64(result).encode("utf-8")
+          end
         end
 
-
-        result = result.force_encoding("utf-8") if @mode == "decrypt"
-        result =  Zlib::Inflate.inflate(result) if @mode == "decrypt"
+        if @mode == "decrypt"
+          result = result.force_encoding("utf-8")
+          if result.include? ":$;"
+            result = result.byteslice(3..result.length)
+            result =  Zlib::Inflate.inflate(result)
+          end
+        end
 
         event[field]= result
 
@@ -198,8 +204,10 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
         #In doubt, I keep it.
 
 
+
       end
 
+      # force a re-initialize on error to be safe
     rescue => e
       @logger.warn("Exception catch on cipher filter", :event => event, :error => e)
 
@@ -207,6 +215,7 @@ class LogStash::Filters::Cipher < LogStash::Filters::Base
       init_cipher
     else
       filter_matched(event)
+
     end
   end # def filter
 
